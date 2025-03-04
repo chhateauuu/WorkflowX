@@ -9,13 +9,35 @@ const App = () => {
 
   const sendMessage = (message) => {
     if (message.trim() !== "") {
+      // 1) Add user message to chat
       setMessages([...messages, { text: message, sender: "user" }]);
-
-      setTimeout(() => {
-        setMessages((prev) => [...prev, { text: "🤖 AI is thinking...", sender: "bot" }]);
-      }, 1000);
+  
+      // 2) Call the backend
+      fetch("http://localhost:8000/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: message }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          // data.reply is the AI's response from the server
+          setMessages((prev) => [
+            ...prev,
+            { text: data.reply, sender: "bot" },
+          ]);
+        })
+        .catch((error) => {
+          console.error("Error calling AI endpoint:", error);
+          setMessages((prev) => [
+            ...prev,
+            { text: "Oops, something went wrong with the AI service.", sender: "bot" },
+          ]);
+        });
     }
   };
+  
 
   return (
     <div className="app-container">
