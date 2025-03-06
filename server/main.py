@@ -62,10 +62,37 @@ def schedule_google_event(title: str, start_datetime: str, end_datetime: str) ->
 def parse_event_time(user_text: str):
     """
     Attempts to parse a date/time from user_text using dateutil's parser.
+    Also extracts meeting duration if specified (e.g., "for 2 hours").
     Returns start and end times in RFC3339 (ISO8601) format, or (None, None) if parsing fails.
     """
-    local_tz = pytz.timezone("America/Chicago")
+    local_tz = pytz.timezone("America/Indiana/Indianapolis")
     now_local = datetime.datetime.now(local_tz)
+
+    # Check for duration specification in the user text
+    duration_hours = 1  # Default duration is 1 hour
+    
+    # Common patterns for duration
+    duration_patterns = [
+        r'for (\d+) hours?',
+        r'for (\d+)h',
+        r'(\d+) hours? (long|duration)',
+        r'(\d+) hour (meeting|call)',
+        r'duration of (\d+) hours?',
+        r'lasting (\d+) hours?'
+    ]
+    
+    import re
+    for pattern in duration_patterns:
+        match = re.search(pattern, user_text.lower())
+        if match:
+            try:
+                duration_hours = int(match.group(1))
+                print(f"DEBUG: Found duration specification: {duration_hours} hours")
+                # Remove the duration part from the user_text to avoid confusion in date parsing
+                user_text = re.sub(pattern, '', user_text)
+                break
+            except (ValueError, IndexError):
+                pass
 
     # We'll try to parse the entire user_text in fuzzy mode,
     # so it can skip unknown words or partial matches.
@@ -80,8 +107,8 @@ def parse_event_time(user_text: str):
             # convert to local tz if already has tzinfo
             dt_local = dt.astimezone(local_tz)
 
-        # We'll create a 1-hour event
-        end_dt_local = dt_local + datetime.timedelta(hours=1)
+        # Create an event with the specified duration
+        end_dt_local = dt_local + datetime.timedelta(hours=duration_hours)
 
         start_str = dt_local.isoformat()
         end_str = end_dt_local.isoformat()
@@ -101,25 +128,46 @@ def chat_endpoint(req: ChatRequest):
 
     # Quick hack: if user says "test calendar", skip classification & parse
     if "test calendar" in user_text:
-        # Hard-code a date/time to tomorrow 2 PM (1-hour event)
+        # Check for duration in test calendar command
+        duration_hours = 1  # Default duration
+        duration_match = None
+        
+        # Look for patterns like "test calendar for 2 hours"
+        duration_patterns = [
+            r'for (\d+) hours?',
+            r'for (\d+)h',
+            r'(\d+) hours',
+        ]
+        
+        import re
+        for pattern in duration_patterns:
+            match = re.search(pattern, user_text.lower())
+            if match:
+                try:
+                    duration_hours = int(match.group(1))
+                    break
+                except (ValueError, IndexError):
+                    pass
+                
+        # Hard-code a date/time to tomorrow 2 PM (with specified duration)
         local_tz = pytz.timezone("America/Chicago")
         now_local = datetime.datetime.now(local_tz)
         # "Tomorrow" at 2 PM
         tomorrow_2pm_local = (now_local + datetime.timedelta(days=3)).replace(
             hour=14, minute=0, second=0, microsecond=0
         )
-        # End time (1 hour later)
-        end_local = tomorrow_2pm_local + datetime.timedelta(hours=1)
+        # End time (with specified duration)
+        end_local = tomorrow_2pm_local + datetime.timedelta(hours=duration_hours)
 
         start_str = tomorrow_2pm_local.isoformat()
         end_str = end_local.isoformat()
 
         event_link = schedule_google_event(
-            title="Test Calendar Event",
+            title=f"Test Calendar Event ({duration_hours} hour{'s' if duration_hours != 1 else ''})",
             start_datetime=start_str,
             end_datetime=end_str
         )
-        return {"reply": f"Test event scheduled! Event link: {event_link}"}
+        return {"reply": f"Test event scheduled for {duration_hours} hour{'s' if duration_hours != 1 else ''}! Event link: {event_link}"}
 
     # Otherwise, do your normal GPT classification or fallback
     classification_resp = client.chat.completions.create(
@@ -147,13 +195,27 @@ def chat_endpoint(req: ChatRequest):
             return {
                 "reply": (
                     "Sorry, I couldn't understand the date/time. Try e.g. "
-                    "'Schedule meeting on March 10 at 2 PM'."
+                    "'Schedule meeting on March 10 at 2 PM for 2 hours'."
                 )
             }
+        
+        # Calculate duration from start and end times
+        start_time = dateutil_parser.parse(start_dt)
+        end_time = dateutil_parser.parse(end_dt)
+        duration_hours = (end_time - start_time).total_seconds() / 3600
+        
         event_link = schedule_google_event(
-            "Meeting scheduled by WorkflowX", start_dt, end_dt
+            f"Meeting scheduled by WorkflowX ({int(duration_hours)} hour{'s' if duration_hours != 1 else ''})", 
+            start_dt, 
+            end_dt
         )
-        return {"reply": f"Meeting scheduled! Event link: {event_link}"}
+        
+        # Format start time more nicely for the response
+        start_time_local = start_time.strftime("%A, %B %d at %I:%M %p")
+        
+        return {
+            "reply": f"Meeting scheduled for {start_time_local} with a duration of {int(duration_hours)} hour{'s' if duration_hours != 1 else ''}! Event link: {event_link}"
+        }
 
     elif "send_email" in classification_text:
         return {"reply": "Intent: send_email. [Placeholder email logic]"}
