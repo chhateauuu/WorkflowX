@@ -8,7 +8,9 @@ import {
   FaSignOutAlt,
   FaUser,
   FaMoon,
-  FaSun
+  FaSun,
+  FaBars,
+  FaTimes
 } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -16,6 +18,7 @@ const Navbar = ({ darkMode, toggleDarkMode }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -28,6 +31,18 @@ const Navbar = ({ darkMode, toggleDarkMode }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
   
+  // Close mobile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (mobileMenuOpen && !e.target.closest('.mobile-menu') && !e.target.closest('.mobile-menu-toggle')) {
+        setMobileMenuOpen(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [mobileMenuOpen]);
+
   return (
     <motion.nav 
       className="navbar"
@@ -44,7 +59,8 @@ const Navbar = ({ darkMode, toggleDarkMode }) => {
           <span className="brand">WorkflowX</span>
         </motion.div>
         
-        <div className="nav-links">
+        {/* Desktop Navigation Links */}
+        <div className="nav-links desktop-only">
           <motion.span 
             className="nav-link active"
             whileHover={{ scale: 1.1 }}
@@ -69,6 +85,14 @@ const Navbar = ({ darkMode, toggleDarkMode }) => {
           >
             Calendar
           </motion.span>
+        </div>
+        
+        {/* Mobile Menu Toggle */}
+        <div 
+          className="mobile-menu-toggle"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        >
+          {mobileMenuOpen ? <FaTimes className="menu-icon" /> : <FaBars className="menu-icon" />}
         </div>
       </div>
       
@@ -186,6 +210,48 @@ const Navbar = ({ darkMode, toggleDarkMode }) => {
           </AnimatePresence>
         </motion.div>
       </div>
+      
+      {/* Mobile Menu */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div 
+            className="mobile-menu"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="mobile-menu-items">
+              <div className="mobile-menu-item active">
+                <span>Dashboard</span>
+              </div>
+              <div className="mobile-menu-item">
+                <span>Projects</span>
+              </div>
+              <div className="mobile-menu-item">
+                <span>Analytics</span>
+              </div>
+              <div className="mobile-menu-item">
+                <span>Calendar</span>
+              </div>
+              <div className="mobile-menu-divider"></div>
+              <div className="mobile-menu-item" onClick={toggleDarkMode}>
+                {darkMode ? (
+                  <>
+                    <FaSun className="mobile-menu-icon" />
+                    <span>Light Mode</span>
+                  </>
+                ) : (
+                  <>
+                    <FaMoon className="mobile-menu-icon" />
+                    <span>Dark Mode</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.nav>
   );
 };
