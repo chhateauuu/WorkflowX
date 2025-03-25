@@ -17,6 +17,11 @@ import re
 
 from server.gmail.gmail_integration import send_gmail, get_latest_emails
 from server.slack_integration import send_slack_message, get_latest_slack_messages
+from server.hubspot_integration import get_hubspot_contacts
+from server.refined_nlp import bert_classify
+from server.nlp_datetime_cleaner import ai_clean_datetime, normalize_datetime_input, intelligent_date_parse
+
+
 
 
 
@@ -69,105 +74,91 @@ def schedule_google_event(title: str, start_datetime: str, end_datetime: str) ->
 
 def parse_event_time(user_text: str):
     """
-    Attempts to parse a date/time from user_text using dateutil's parser and special handling for relative dates.
-    Also extracts meeting duration if specified (e.g., "for 2 hours").
-    Returns start and end times in RFC3339 (ISO8601) format, or (None, None) if parsing fails.
+    Parses user text to determine meeting start and end time.
+    Handles phrases like "next Wednesday at 3pm for 2 hours" or "Wednesday next week at 2pm".
+    Returns (start_time, end_time) in ISO format.
     """
-    
-    local_tz = pytz.timezone("America/Indiana/Indianapolis")
+    local_tz = pytz.timezone("America/Chicago")
     now_local = datetime.datetime.now(local_tz)
-    
-    # Special handling for common relative date terms
-    tomorrow_pattern = re.compile(r'\b(tomorrow|tmr|tmrw)\b', re.IGNORECASE)
-    next_week_pattern = re.compile(r'\b(next\s+week)\b', re.IGNORECASE)
-    
-    # Handle "tomorrow" explicitly
-    tomorrow_match = tomorrow_pattern.search(user_text)
-    next_week_match = next_week_pattern.search(user_text)
-    
-    # Pre-process the text for special cases before sending to dateutil
-    modified_text = user_text
-    
-    try:
-        # Check for duration specification in the user text
-        duration_hours = 1  # Default duration is 1 hour
-        
-        # Common patterns for duration - simplified for reliability
-        duration_patterns = [
-            r'for (\d+) hours?',
-            r'for (\d+)h',
-            r'(\d+) hours? long',
-            r'(\d+) hour meeting'
-        ]
-        
-        for pattern in duration_patterns:
+    modified_text = user_text.lower()
+
+    # Default duration
+    duration_hours = 1
+
+    # Extract duration if specified
+    duration_patterns = [
+        r"for (\d+) hours?",
+        r"for (\d+)h",
+        r"(\d+) hours? long",
+        r"(\d+) hour meeting"
+    ]
+    for pattern in duration_patterns:
+        match = re.search(pattern, modified_text)
+        if match:
             try:
-                match = re.search(pattern, user_text.lower())
-                if match:
-                    try:
-                        duration_hours = int(match.group(1))
-                        print(f"DEBUG: Found duration specification: {duration_hours} hours")
-                        # Remove the duration part from the user_text to avoid confusion in date parsing
-                        modified_text = re.sub(pattern, '', modified_text)
-                        break
-                    except (ValueError, IndexError) as e:
-                        print(f"Error extracting duration: {e}")
+                duration_hours = int(match.group(1))
+                modified_text = re.sub(pattern, '', modified_text)
+                break
             except Exception as e:
-                print(f"Error in duration pattern matching: {e}")
+                print("Duration extraction error:", e)
 
-        # We'll try to parse the entire user_text in fuzzy mode,
-        # so it can skip unknown words or partial matches.
-        dt = dateutil_parser.parse(modified_text, fuzzy=True)
-        print(f"DEBUG (dateutil): user_text={modified_text}, dt={dt}")
+    # Check for next day of the week or "weekday next week" or "next week on weekday"
+    weekday_map = {
+        "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+        "friday": 4, "saturday": 5, "sunday": 6
+    }
+    
+    # Enhanced pattern detection
+    next_day_match = re.search(r'next\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)', modified_text)
+    alt_form_match = re.search(r'(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+next\s+week', modified_text)
+    next_week_day_match = re.search(r'next\s+week\s+(?:on\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)', modified_text)
+    next_week_at_day_match = re.search(r'next\s+week\s+at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s+on\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)', modified_text)
 
-        if dt.tzinfo is None:
-            # localize if naive
-            dt_local = local_tz.localize(dt)
-        else:
-            # convert to local tz if already has tzinfo
-            dt_local = dt.astimezone(local_tz)
-            
-        # Handle specific date cases that might not be parsed correctly
-        if tomorrow_match:
-            # If "tomorrow" is in the text, ensure the date is tomorrow regardless of what dateutil parsed
-            tomorrow_date = now_local.date() + datetime.timedelta(days=1)
-            dt_local = dt_local.replace(year=tomorrow_date.year, month=tomorrow_date.month, day=tomorrow_date.day)
-            print(f"DEBUG: Explicitly set date to tomorrow: {dt_local}")
-            
-        if next_week_match:
-            # If "next week" is in the text, ensure the date is 7 days from now
-            next_week_date = now_local.date() + datetime.timedelta(days=7)
-            dt_local = dt_local.replace(year=next_week_date.year, month=next_week_date.month, day=next_week_date.day)
-            print(f"DEBUG: Explicitly set date to next week: {dt_local}")
+    weekday_str = None
+    if next_day_match:
+        weekday_str = next_day_match.group(1).lower()
+    elif alt_form_match:
+        weekday_str = alt_form_match.group(1).lower()
+    elif next_week_day_match:
+        weekday_str = next_week_day_match.group(1).lower()
+    elif next_week_at_day_match:
+        weekday_str = next_week_at_day_match.group(1).lower()
+    
+    if weekday_str:
+        target_weekday = weekday_map[weekday_str]
+        current_weekday = now_local.weekday()
+        
+        # Calculate days to add to get to the specified weekday next week
+        days_to_add = 7 - current_weekday + target_weekday
+        if days_to_add >= 7:
+            days_to_add = days_to_add % 7
+        days_to_add += 7  # Add another week to ensure we're in "next week"
+        
+        dt_local = now_local + datetime.timedelta(days=days_to_add)
+    else:
+        dt_local = now_local
 
-        # Create an event with the specified duration
-        end_dt_local = dt_local + datetime.timedelta(hours=duration_hours)
+    # Try to extract time from the modified text
+    time_match = re.search(r'at\s+(\d{1,2})(:(\d{2}))?\s*(am|pm)?', modified_text)
+    if time_match:
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(3) or 0)
+        meridiem = time_match.group(4)
 
-        # Make sure we're not scheduling in the past
-        if dt_local < now_local:
-            # If time is in the past, assume the user meant the next occurrence
-            print("Detected past time, adjusting to future")
-            if dt_local.date() == now_local.date():
-                # Same day but earlier time - add a day
-                dt_local = dt_local + datetime.timedelta(days=1)
-                print(f"Time was today but in the past, adjusted to tomorrow: {dt_local}")
-            else:
-                # Date in the past - add a year
-                dt_local = dt_local.replace(year=now_local.year + 1)
-                print(f"Date was in the past, adjusted to next year: {dt_local}")
-            
-            # Recalculate end time
-            end_dt_local = dt_local + datetime.timedelta(hours=duration_hours)
+        if meridiem == "pm" and hour < 12:
+            hour += 12
+        elif meridiem == "am" and hour == 12:
+            hour = 0
 
-        start_str = dt_local.isoformat()
-        end_str = end_dt_local.isoformat()
+        dt_local = dt_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    else:
+        # Default to 3 PM
+        dt_local = dt_local.replace(hour=15, minute=0, second=0, microsecond=0)
 
-        return start_str, end_str
+    end_dt_local = dt_local + datetime.timedelta(hours=duration_hours)
 
-    except Exception as e:
-        # If parsing fails entirely
-        print(f"DEBUG (dateutil) parse error: {e}")
-        return None, None
+    return dt_local.isoformat(), end_dt_local.isoformat()
+
 
 
 def extract_email_and_message(user_text: str):
@@ -194,7 +185,7 @@ def extract_email_and_message(user_text: str):
 
 def generate_email_content(instructions: str):
     """
-    Takes leftover instructions (like 'telling her I can’t attend the meeting tomorrow...')
+    Takes leftover instructions (like 'telling her I can't attend the meeting tomorrow...')
     and uses GPT to produce a subject and body.
     """
     # 1) GPT for subject
@@ -282,43 +273,78 @@ def chat_endpoint(req: ChatRequest):
         )
         return {"reply": f"Test event scheduled for {duration_hours} hour{'s' if duration_hours != 1 else ''}! Event link: {event_link}"}
 
-    # Otherwise, do your normal GPT classification or fallback
-    classification_resp = openai.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are a classifier. Classify the user's message into "
-                    "one of these intents: schedule_meeting, send_email, retrieve_data, retrieve_email, send_slack, retrieve_slack or general. "
-                    "Output ONLY the intent name."
-                )
-            },
-            {"role": "user", "content": user_text}
-        ],
-        max_tokens=5,
-        temperature=0.0,
-    )
+    # # Otherwise, do your normal GPT classification or fallback
+    # classification_resp = openai.chat.completions.create(
+    #     model="gpt-3.5-turbo",
+    #     messages=[
+    #         {
+    #             "role": "system",
+    #             "content": (
+    #                 "You are a classifier. Classify the user's message into "
+    #                 "one of these intents: schedule_meeting, send_email, retrieve_data, retrieve_email, send_slack, retrieve_slack, retrieve_crm or general. "
+    #                 "Output ONLY the intent name."
+    #             )
+    #         },
+    #         {"role": "user", "content": user_text}
+    #     ],
+    #     max_tokens=5,
+    #     temperature=0.0,
+    # )
 
-    classification_text = classification_resp.choices[0].message.content.strip().lower()
+    # classification_text = classification_resp.choices[0].message.content.strip().lower()
+
+    classification_text = bert_classify(user_text)
+    print("💡 NLP Classification:", classification_text)
+
 
     if "schedule_meeting" in classification_text:
-        start_dt, end_dt = parse_event_time(user_text)
+        # First normalize the input to handle common typos and restructure date/time expressions
+        user_text = normalize_datetime_input(user_text)
+        print(f"Normalized text: {user_text}")
+        
+        # Try advanced intelligent date parsing first
+        start_dt_obj, end_dt_obj = intelligent_date_parse(user_text)
+        
+        if start_dt_obj and end_dt_obj:
+            # Convert to ISO format strings
+            start_dt = start_dt_obj.isoformat()
+            end_dt = end_dt_obj.isoformat()
+            print(f"Intelligent parser result: start={start_dt}, end={end_dt}")
+        else:
+            # If intelligent parsing failed, try AI-based cleaner
+            ai_response = ai_clean_datetime(user_text)
+            print(f"AI response: {ai_response}")
+
+            # Try to parse the structured format from AI
+            match = re.search(r"START=(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})\s+END=(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})", ai_response)
+            if match:
+                start_dt = match.group(1)
+                end_dt = match.group(2)
+                print(f"AI parsed: start={start_dt}, end={end_dt}")
+            else:
+                # If AI cleaner failed, fallback to manual parser
+                print("AI parser failed, using manual parser")
+                start_dt, end_dt = parse_event_time(user_text)
+
+        # Still failed? Bail out
         if not start_dt:
             return {
                 "reply": (
-                    "Sorry, I couldn't understand the date/time. Try e.g. "
+                    "Sorry, I couldn't understand the date/time. Try rephrasing it like: "
                     "'Schedule meeting on March 10 at 2 PM for 2 hours'."
                 )
             }
-        
+            
         # Calculate duration from start and end times
         start_time = dateutil_parser.parse(start_dt)
         end_time = dateutil_parser.parse(end_dt)
         duration_hours = (end_time - start_time).total_seconds() / 3600
         
+        # Create a more descriptive meeting title based on the original request
+        meeting_title = f"Meeting: {user_text.strip()[:50]}"
+        
         event_link = schedule_google_event(
-            f"Meeting scheduled by WorkflowX ({int(duration_hours)} hour{'s' if duration_hours != 1 else ''})", 
+            meeting_title, 
             start_dt, 
             end_dt
         )
@@ -392,6 +418,21 @@ def chat_endpoint(req: ChatRequest):
             return {"reply": "No emails found or an error occurred."}
 
         return {"reply": emails_summary}
+    
+    elif "retrieve_crm" in classification_text or "hubspot_retrieve" in classification_text:
+        contacts = get_hubspot_contacts(limit=5)
+        if not contacts:
+            return {"reply": "No HubSpot contacts found or an error occurred."}
+
+        reply_str = "📇 Here are your top 5 HubSpot contacts:\n"
+        for i, c in enumerate(contacts, start=1):
+            reply_str += (
+                f"\n{i}) 🧑 {c['firstname']} {c['lastname']}\n"
+                f"    📧 {c['email']}\n"
+                f"    🆔 ID: {c['id']}\n"
+            )
+        return {"reply": reply_str}
+
 
 
 
