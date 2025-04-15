@@ -25,11 +25,24 @@ from server.hubspot_integration import (
 from server.refined_nlp import bert_classify
 from server.nlp_datetime_cleaner import ai_clean_datetime, normalize_datetime_input, intelligent_date_parse, normalize_text
 
+from server.auth import router as auth_router
+from server.database import init_db
+
+app = FastAPI()
+
+@app.on_event("startup")
+async def on_startup():
+    await init_db()
+
+app.include_router(auth_router, prefix="/auth", tags=["auth"])
+
+
+
 load_dotenv()
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-app = FastAPI()
+
 
 origins = ["http://localhost:3000"]
 app.add_middleware(
