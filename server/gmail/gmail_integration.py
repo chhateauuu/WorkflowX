@@ -105,31 +105,56 @@ def _summarize_email(content: str) -> str:
 ###############################################################################
 # 4) GET + SUMMARIZE LATEST EMAILS FROM INBOX
 ###############################################################################
-def get_latest_emails(max_results: int = 5) -> str:
+def get_latest_emails(max_results: int = 5, sender_filter: str = None) -> str:
     """
     Retrieves the latest messages from the user's Inbox (max_results),
+    with optional filtering by sender,
     then for each email:
       - Extracts From, Date, Subject, plain-text body
       - Summarizes the content using GPT
     Returns a nicely formatted string with details for all emails.
+    
+    Parameters:
+    - max_results: Maximum number of emails to retrieve
+    - sender_filter: Filter emails by sender name or email address (case-insensitive substring match)
     """
     try:
         creds = get_gmail_credentials()
         service = build("gmail", "v1", credentials=creds)
 
         # 1) List messages in the inbox
+        query = "in:inbox"
+        
+        # Add sender filter if provided
+        if sender_filter:
+            # Check if it looks like an email address
+            if '@' in sender_filter:
+                query += f" from:{sender_filter}"
+            else:
+                # For names we need to be more careful - Gmail API uses exact phrase matching
+                query += f" from:{sender_filter}"
+        
         result = service.users().messages().list(
             userId="me",
-            q="in:inbox",
+            q=query,
             maxResults=max_results
         ).execute()
 
         messages = result.get("messages", [])
         if not messages:
-            return "No emails found in your Inbox."
+            if sender_filter:
+                return f"No emails found from {sender_filter} in your Inbox."
+            else:
+                return "No emails found in your Inbox."
 
-        final_output = ["📬 Here are your latest emails:\n\n"]
+        if sender_filter:
+            final_output = [f"📬 Here are your latest emails from {sender_filter}:\n\n"]
+        else:
+            final_output = ["📬 Here are your latest emails:\n\n"]
 
+        # For tracking if server-side filtering worked correctly
+        matching_emails = []
+        
         # 2) For each message ID, get the 'full' format
         for idx, msg_info in enumerate(messages, start=1):
             msg_id = msg_info["id"]
@@ -147,8 +172,27 @@ def get_latest_emails(max_results: int = 5) -> str:
             date_ = next((h["value"] for h in headers if h["name"].lower() == "date"), "(Unknown Date)")
             subject = next((h["value"] for h in headers if h["name"].lower() == "subject"), "(No Subject)")
 
+            # If sender filter is provided, do client-side filtering as well
+            # This is a backup in case Gmail API query doesn't filter exactly as expected
+            if sender_filter and sender_filter.lower() not in from_.lower():
+                continue
+                
+            matching_emails.append({
+                "id": msg_id,
+                "from": from_,
+                "date": date_,
+                "subject": subject,
+                "payload": payload
+            })
+
+        # If no emails match our filter (client-side)
+        if sender_filter and not matching_emails:
+            return f"No emails found from {sender_filter} in your Inbox."
+            
+        # Process the matching emails
+        for idx, email in enumerate(matching_emails, start=1):
             # 3) Extract plain-text body
-            plain_text = _extract_plain_text(payload)
+            plain_text = _extract_plain_text(email["payload"])
 
             # 4) Summarize with GPT
             summary = _summarize_email(plain_text)
@@ -156,9 +200,9 @@ def get_latest_emails(max_results: int = 5) -> str:
             # 5) Format
             email_info = (
                 f"Email #{idx}\n"
-                f"Subject: {subject}\n"
-                f"From: {from_}\n"
-                f"Date: {date_}\n"
+                f"Subject: {email['subject']}\n"
+                f"From: {email['from']}\n"
+                f"Date: {email['date']}\n"
                 f"Summary: {summary}\n"
                 f"----------------------------------------\n\n"
             )

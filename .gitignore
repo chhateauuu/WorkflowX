@@ -28,3 +28,4 @@ server/service_account.json
 server/gmail/credentials.json
 server/gmail/webcredentials.json
 
+server/gmail/gmail_token.pickle
