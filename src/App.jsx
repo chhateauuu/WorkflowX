@@ -1,11 +1,60 @@
 import React, { useState, useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "./components/Navbar";
 import ChatWindow from "./components/ChatWindow";
 import MessageInput from "./components/MessageInput";
+import Login from "./components/Login";
+import Register from "./components/Register";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import "./styles.css";
 
-const App = () => {
+// Debug component for auth issues
+const DebugAuth = () => {
+  const { currentUser } = useAuth();
+  const [debugInfo, setDebugInfo] = useState({});
+  
+  useEffect(() => {
+    const getRegisteredUsers = () => {
+      try {
+        return JSON.parse(localStorage.getItem('registeredUsers') || '{}');
+      } catch (e) {
+        return { error: e.message };
+      }
+    };
+    
+    setDebugInfo({
+      currentUser,
+      registeredUsers: getRegisteredUsers(),
+      localStorage: {
+        user: localStorage.getItem('user'),
+        darkMode: localStorage.getItem('darkMode')
+      }
+    });
+  }, [currentUser]);
+  
+  return (
+    <div className="debug-container">
+      <h1>Authentication Debug</h1>
+      <div className="debug-section">
+        <h2>Current User</h2>
+        <pre>{JSON.stringify(debugInfo.currentUser, null, 2)}</pre>
+      </div>
+      <div className="debug-section">
+        <h2>Registered Users Cache</h2>
+        <pre>{JSON.stringify(debugInfo.registeredUsers, null, 2)}</pre>
+      </div>
+      <div className="debug-section">
+        <h2>Local Storage</h2>
+        <pre>{JSON.stringify(debugInfo.localStorage, null, 2)}</pre>
+      </div>
+    </div>
+  );
+};
+
+// Main app content
+const MainApp = () => {
   const [messages, setMessages] = useState([]);
   const [darkMode, setDarkMode] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -141,6 +190,29 @@ const App = () => {
         </motion.div>
       )}
     </AnimatePresence>
+  );
+};
+
+// App with routing
+const App = () => {
+  return (
+    <Router>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route 
+            path="/" 
+            element={
+              <ProtectedRoute>
+                <MainApp />
+              </ProtectedRoute>
+            } 
+          />
+          <Route path="/debug" element={<DebugAuth />} />
+        </Routes>
+      </AuthProvider>
+    </Router>
   );
 };
 

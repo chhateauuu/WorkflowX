@@ -13,12 +13,26 @@ import {
   FaTimes
 } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "../contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const Navbar = ({ darkMode, toggleDarkMode }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  const { currentUser, logout } = useAuth();
+  const navigate = useNavigate();
+  
+  // For debugging
+  useEffect(() => {
+    if (currentUser) {
+      console.log("Navbar: Current user data:", currentUser);
+    } else {
+      console.log("Navbar: No current user");
+    }
+  }, [currentUser]);
   
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -42,6 +56,22 @@ const Navbar = ({ darkMode, toggleDarkMode }) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [mobileMenuOpen]);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+    setDropdownOpen(false);
+  };
+
+  // Helper function to get display name
+  const getUserDisplayName = () => {
+    if (!currentUser) return 'User';
+    
+    if (currentUser.name) return currentUser.name;
+    if (currentUser.email) return currentUser.email;
+    
+    return 'User';
+  };
 
   return (
     <motion.nav 
@@ -160,55 +190,68 @@ const Navbar = ({ darkMode, toggleDarkMode }) => {
           <FaCog className="nav-icon" />
         </motion.div>
         
-        <motion.div 
-          className="profile-container"
-          onClick={(e) => {
-            e.stopPropagation();
-            setDropdownOpen(!dropdownOpen);
-            setNotificationsOpen(false);
-          }}
-          whileHover={{ scale: 1.05 }}
-        >
-          <FaUserCircle className="profile-icon" />
-          <span className="profile-name">Aarya</span>
-          <FaChevronDown className={`dropdown-arrow ${dropdownOpen ? 'open' : ''}`} />
-          
-          <AnimatePresence>
-            {dropdownOpen && (
-              <motion.div 
-                className="dropdown-menu profile-menu"
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.2 }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="dropdown-item">
-                  <FaUser className="dropdown-icon" />
-                  <span>My Profile</span>
-                </div>
-                <div className="dropdown-item" onClick={toggleDarkMode}>
-                  {darkMode ? (
-                    <>
-                      <FaSun className="dropdown-icon" />
-                      <span>Light Mode</span>
-                    </>
-                  ) : (
-                    <>
-                      <FaMoon className="dropdown-icon" />
-                      <span>Dark Mode</span>
-                    </>
-                  )}
-                </div>
-                <div className="dropdown-divider"></div>
-                <div className="dropdown-item logout">
-                  <FaSignOutAlt className="dropdown-icon" />
-                  <span>Sign Out</span>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
+        {currentUser ? (
+          <motion.div 
+            className="profile-container"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDropdownOpen(!dropdownOpen);
+              setNotificationsOpen(false);
+            }}
+            whileHover={{ scale: 1.05 }}
+          >
+            <FaUserCircle className="profile-icon" />
+            <span className="profile-name">{getUserDisplayName()}</span>
+            <FaChevronDown className={`dropdown-arrow ${dropdownOpen ? 'open' : ''}`} />
+            
+            <AnimatePresence>
+              {dropdownOpen && (
+                <motion.div 
+                  className="dropdown-menu profile-menu"
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="dropdown-item">
+                    <FaUser className="dropdown-icon" />
+                    <span>My Profile</span>
+                  </div>
+                  <div className="dropdown-item" onClick={toggleDarkMode}>
+                    {darkMode ? (
+                      <>
+                        <FaSun className="dropdown-icon" />
+                        <span>Light Mode</span>
+                      </>
+                    ) : (
+                      <>
+                        <FaMoon className="dropdown-icon" />
+                        <span>Dark Mode</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="dropdown-divider"></div>
+                  <div 
+                    className="dropdown-item logout"
+                    onClick={handleLogout}
+                  >
+                    <FaSignOutAlt className="dropdown-icon" />
+                    <span>Sign Out</span>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        ) : (
+          <motion.div 
+            className="login-button"
+            whileHover={{ scale: 1.05 }}
+            onClick={() => navigate('/login')}
+          >
+            Sign In
+          </motion.div>
+        )}
       </div>
       
       {/* Mobile Menu */}
@@ -235,19 +278,36 @@ const Navbar = ({ darkMode, toggleDarkMode }) => {
                 <span>Calendar</span>
               </div>
               <div className="mobile-menu-divider"></div>
-              <div className="mobile-menu-item" onClick={toggleDarkMode}>
+              {currentUser && (
+                <div className="mobile-menu-user-info">
+                  <FaUserCircle className="mobile-menu-user-icon" />
+                  <span className="mobile-menu-user-name">{getUserDisplayName()}</span>
+                </div>
+              )}
+              <div className="mobile-menu-item theme-toggle" onClick={toggleDarkMode}>
                 {darkMode ? (
                   <>
-                    <FaSun className="mobile-menu-icon" />
+                    <FaSun className="mobile-menu-item-icon" />
                     <span>Light Mode</span>
                   </>
                 ) : (
                   <>
-                    <FaMoon className="mobile-menu-icon" />
+                    <FaMoon className="mobile-menu-item-icon" />
                     <span>Dark Mode</span>
                   </>
                 )}
               </div>
+              {currentUser ? (
+                <div className="mobile-menu-item logout" onClick={handleLogout}>
+                  <FaSignOutAlt className="mobile-menu-item-icon" />
+                  <span>Sign Out</span>
+                </div>
+              ) : (
+                <div className="mobile-menu-item login" onClick={() => navigate('/login')}>
+                  <FaUser className="mobile-menu-item-icon" />
+                  <span>Sign In</span>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
