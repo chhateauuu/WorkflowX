@@ -4,7 +4,11 @@ import dateparser
 from datetime import datetime, timedelta
 import pytz
 
-date_rewrite_pipeline = pipeline("text2text-generation", model="google/flan-t5-base")
+date_rewrite_pipeline = pipeline(
+    "text2text-generation",
+    model="google/flan-t5-base",
+    framework="pt"  # <- This forces PyTorch and skips all tf_keras errors
+)
 
 def normalize_text(text: str) -> str:
     """

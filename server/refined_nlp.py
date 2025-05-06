@@ -3,7 +3,11 @@ import re
 import openai
 import os
 
-zero_shot_classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
+zero_shot_classifier = pipeline(
+    "zero-shot-classification", 
+    model="facebook/bart-large-mnli", 
+    framework="pt"  # ← forces PyTorch backend
+)
 
 api_key = os.getenv("OPENAI_API_KEY")
 if api_key:
