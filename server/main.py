@@ -199,40 +199,46 @@ def parse_event_time(user_text: str):
 def extract_email_and_message(user_text: str):
     normalized_text = normalize_text(user_text)
     email_regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'
-    to_match = re.search(r'(?:to|for|towards?|with|unto)\s+([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})', normalized_text, re.IGNORECASE)
+    to_match = re.search(r'(?:to|for|towards?|with|unto)\s+(' + email_regex + r')', normalized_text, re.IGNORECASE)
     if to_match:
         email = to_match.group(1)
         leftover = re.sub(r'(?:to|for|towards?|with|unto)\s+' + re.escape(email), '', normalized_text)
     else:
-        email_match = re.search(email_regex, normalized_text)
-        if email_match:
-            email = email_match.group(0)
+        m = re.search(email_regex, normalized_text)
+        if m:
+            email = m.group(0)
             leftover = normalized_text.replace(email, "")
         else:
-            email = "someone@example.com"
+            email = None
             leftover = normalized_text
-    
+
+    # strip out the “send/draft” verb
     leftover = re.sub(r'(?:send|write|compose|draft|create)\s+(?:an?|the)?\s*(?:email|mail|message|note)', '', leftover)
-    subject_match = re.search(r'(?:with\s+subject|with\s+title|subject\s*:|title\s*:)\s*["\']?([^"\']+)["\']?', leftover, re.IGNORECASE)
+
+    # explicit subject
     explicit_subject = None
-    if subject_match:
-        explicit_subject = subject_match.group(1).strip()
-        leftover = re.sub(r'(?:with\s+subject|with\s+title|subject\s*:|title\s*:)\s*["\']?([^"\']+)["\']?', '', leftover, flags=re.IGNORECASE)
-    
-    sender_match = re.search(r'(?:from|by|sent\s+by|written\s+by)\s+([a-zA-Z0-9_]+(?:\s+[a-zA-Z0-9_]+){0,2})\b', leftover, re.IGNORECASE)
+    subj_m = re.search(r'(?:with\s+subject|subject\s*:)\s*["\']?([^"\']+)["\']?', leftover, re.IGNORECASE)
+    if subj_m:
+        explicit_subject = subj_m.group(1).strip()
+        leftover = re.sub(subj_m.group(0), '', leftover, flags=re.IGNORECASE)
+
+    # sender name
     sender_name = None
-    if sender_match:
-        sender_name = sender_match.group(1).strip()
-        leftover = re.sub(r'(?:from|by|sent\s+by|written\s+by)\s+' + re.escape(sender_name) + r'\b', '', leftover, flags=re.IGNORECASE)
-    
-    leftover = re.sub(r'(?:saying|telling|stating|that\s+says|informing)\s+(?:that|him|her|them)?', '', leftover)
-    leftover = re.sub(r'(?:about|regarding|concerning|on\s+the\s+topic\s+of)', '', leftover)
-    
-    leftover = leftover.strip()
+    snd_m = re.search(r'(?:from|by)\s+([A-Za-z][A-Za-z ]+)', leftover)
+    if snd_m:
+        sender_name = snd_m.group(1).strip().title()
+        leftover = re.sub(snd_m.group(0), '', leftover)
+
+    # **here** we introduce recipient_name (you can enhance later if you want to pull “to John”)
+    recipient_name = None
+
+    leftover = re.sub(r'(?:saying|that\s+says|about|regarding)', '', leftover).strip()
     if not leftover:
-        leftover = "Please find the information you requested."
-    
-    return email, leftover, explicit_subject, sender_name
+        leftover = "Please see below."
+
+    # now we return 5 values so unpacking always works
+    return email, leftover, explicit_subject, sender_name, recipient_name
+
 
 def generate_email_content(instructions: str, explicit_subject=None, sender_name=None, recipient_email=None):
     if explicit_subject:
@@ -547,102 +553,48 @@ def chat_endpoint(req: ChatRequest):
         reply += f" Event link: {event_link}"
         return {"reply": reply}
         
-    elif "send_email" in classification_text or (req.dialog_context and req.dialog_context.get("waiting_for") in ["recipient_email", "sender_name"]):
-        if req.dialog_context and req.dialog_context.get("waiting_for"):
-            dialog_context = req.dialog_context
-            if dialog_context.get("waiting_for") == "recipient_email":
-                to_email = original_text.strip()
-                email_pattern = r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
-                is_valid_email = bool(re.match(email_pattern, to_email))
-                if is_valid_email:
-                    leftover_instructions = dialog_context.get("original_instructions", "")
-                    explicit_subject = dialog_context.get("explicit_subject")
-                    sender_name = dialog_context.get("sender_name")
-                    if sender_name:
-                        subject, body = generate_email_content(
-                            leftover_instructions, 
-                            explicit_subject, 
-                            sender_name=sender_name, 
-                            recipient_email=to_email
-                        )
-                        result = send_gmail(to_email, subject, body)
-                        if result:
-                            return {"reply": f"Email sent to {to_email} with subject: '{subject}'.\nSigned as: {sender_name}"}
-                        else:
-                            return {"reply": f"Failed to send email to {to_email}."}
-                    else:
-                        return {
-                            "reply": f"Who should I say this email is from?",
-                            "dialog_context": {
-                                "waiting_for": "sender_name",
-                                "to_email": to_email,
-                                "original_instructions": leftover_instructions,
-                                "explicit_subject": explicit_subject
-                            }
-                        }
-                else:
-                    return {
-                        "reply": "That doesn't look like a valid email address. Please provide a valid email (e.g., someone@example.com):",
-                        "dialog_context": dialog_context
-                    }
-            elif dialog_context.get("waiting_for") == "sender_name":
-                sender_text = original_text.strip()
-                if sender_text.lower().startswith("from "):
-                    sender_name = sender_text[5:].strip()
-                else:
-                    sender_name = sender_text
-                to_email = dialog_context.get("to_email")
-                leftover_instructions = dialog_context.get("original_instructions", "")
-                explicit_subject = dialog_context.get("explicit_subject")
-                print(f"Generating email from {sender_name} to {to_email} with instructions: {leftover_instructions}")
-                subject, body = generate_email_content(
-                    leftover_instructions, 
-                    explicit_subject, 
-                    sender_name=sender_name, 
-                    recipient_email=to_email
-                )
-                result = send_gmail(to_email, subject, body)
-                if result:
-                    return {"reply": f"Email sent to {to_email} with subject: '{subject}'.\nSigned as: {sender_name}"}
-                else:
-                    return {"reply": f"Failed to send email to {to_email}."}
+    elif "send_email" in classification_text or (req.dialog_context and req.dialog_context.get("waiting_for") == "recipient_email"):
+        dc = req.dialog_context or {}
+
+        # 1) If we're waiting for the email, grab it
+        if dc.get("waiting_for") == "recipient_email":
+            dc["recipient_email"] = original_text.strip()
         else:
-            to_email, leftover_instructions, explicit_subject, sender_name = extract_email_and_message(original_text)
-            email_pattern = r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
-            is_valid_email = bool(re.match(email_pattern, to_email))
-            if is_valid_email and sender_name:
-                print(f"Generating email from {sender_name} to {to_email} with instructions: {leftover_instructions}")
-                subject, body = generate_email_content(
-                    leftover_instructions, 
-                    explicit_subject, 
-                    sender_name=sender_name, 
-                    recipient_email=to_email
-                )
-                result = send_gmail(to_email, subject, body)
-                if result:
-                    return {"reply": f"Email sent to {to_email} with subject: '{subject}'.\nSigned as: {sender_name}"}
-                else:
-                    return {"reply": f"Failed to send email to {to_email}."}
-            elif to_email == "someone@example.com" or not is_valid_email:
-                return {
-                    "reply": "Who would you like to send this email to? Please provide their email address:",
-                    "dialog_context": {
-                        "waiting_for": "recipient_email",
-                        "original_instructions": leftover_instructions,
-                        "explicit_subject": explicit_subject,
-                        "sender_name": sender_name
-                    }
-                }
-            else:
-                return {
-                    "reply": f"Who should I say this email is from?",
-                    "dialog_context": {
-                        "waiting_for": "sender_name",
-                        "to_email": to_email,
-                        "original_instructions": leftover_instructions,
-                        "explicit_subject": explicit_subject
-                    }
-                }
+            # 2) First turn: parse out whatever we can
+            rec_email, instructions, explicit_subject, sender_name, recipient_name = extract_email_and_message(original_text)
+            dc = {
+                "instructions": instructions,
+                "explicit_subject": explicit_subject,
+                "sender_name": sender_name,
+                "recipient_name": recipient_name,
+                "recipient_email": rec_email
+            }
+
+        # 3) If no valid email yet, ask once
+        email_regex = r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
+        if not dc.get("recipient_email") or not re.match(email_regex, dc["recipient_email"]):
+            whom = dc.get("recipient_name") or "the recipient"
+            return {
+                "reply": f"What’s {whom}’s email address?",
+                "dialog_context": {**dc, "waiting_for": "recipient_email"}
+            }
+
+        # 4) We have a valid email — build & send
+        sender = dc.get("sender_name") or "Your Name"
+        subject, body = generate_email_content(
+            dc["instructions"],
+            explicit_subject=dc["explicit_subject"],
+            sender_name=sender,
+            recipient_email=dc["recipient_email"]
+        )
+        sent = send_gmail(dc["recipient_email"], subject, body)
+        if sent:
+            return {
+                "reply": f"Email sent to {dc['recipient_email']} with subject “{subject}”."
+            }
+        else:
+            return {"reply": "Sorry, I couldn’t send that email. Please try again."}
+
         
     elif "send_slack" in classification_text or "slack_send" in classification_text:
         channel, text, is_ai_generated = extract_slack_channel_and_message(original_text)
