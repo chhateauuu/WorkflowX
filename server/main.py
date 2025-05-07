@@ -736,7 +736,7 @@ def chat_endpoint(req: ChatRequest):
         if match_email:
             identifier_name = match_email.group(1).strip()
             new_email = match_email.group(2).strip()
-            from server.hubspot_integration import get_hubspot_contacts
+            
             contacts = get_hubspot_contacts(limit=50)
             contact_id = None
             for c in contacts:
@@ -797,6 +797,19 @@ def chat_endpoint(req: ChatRequest):
             return {"reply": f"Updated HubSpot contact {updated_id} successfully."}
         else:
             return {"reply": f"Failed to update contact with id {contact_id}."}
+        
+    elif "retrieve_crm" in classification_text:
+        contacts = get_hubspot_contacts(limit=5)
+        if not contacts:
+            return {"reply": "No contacts found in HubSpot or an error occurred."}
+
+        reply_lines = ["Here are your latest HubSpot contacts:"]
+        for c in contacts:
+            line = f"👤 {c.get('firstname', 'Unknown')} {c.get('lastname', '')} - {c.get('email', 'No email')}"
+            reply_lines.append(line)
+        
+        return {"reply": "\n".join(reply_lines)}
+
     
     else:
         final_resp = openai.chat.completions.create(

@@ -33,10 +33,12 @@ def bert_classify(user_text: str):
             r'add\s+(?:a\s+)?(?:hubspot|crm)\s+contact'
         ],
         'update_crm': [
+            r'(?:update|change)\s+(?:hubspot|crm)\s+.*?\s+to\s+.*',
             r'(?:update|change)\s+(?:hubspot|crm)\s+(?:contact|record)\s+(?:with\s+id\s+|id\s*[:#]?)\s*(\d+)',
             r'(?:update|change)\s+(?:hubspot|crm)\s+(?:contact|record|name|email).*?\s+to\s+.*',
             r'modify\s+(?:a\s+)?(?:hubspot|crm)\s+contact'
         ],
+
         'send_email': [
             r'send\s+(?:a\s+)?(?:email|mail|message)',
             r'write\s+(?:a\s+)?(?:email|mail|message|note)',
