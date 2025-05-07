@@ -15,18 +15,18 @@ import pytz
 from dateutil import parser as dateutil_parser
 import re
 
-from server.gmail.gmail_integration import send_gmail, get_latest_emails
-from server.slack_integration import send_slack_message, get_latest_slack_messages
-from server.hubspot_integration import (
+from gmail.gmail_integration import send_gmail, get_latest_emails
+from slack_integration import send_slack_message, get_latest_slack_messages
+from hubspot_integration import (
     get_hubspot_contacts,
     create_hubspot_contact,
     update_hubspot_contact
 )
-from server.refined_nlp import bert_classify
-from server.nlp_datetime_cleaner import ai_clean_datetime, normalize_datetime_input, intelligent_date_parse, normalize_text
+from refined_nlp import bert_classify
+from nlp_datetime_cleaner import ai_clean_datetime, normalize_datetime_input, intelligent_date_parse, normalize_text
 
-from server.auth import router as auth_router
-from server.database import init_db
+from auth import router as auth_router
+from database import init_db
 
 app = FastAPI()
 
@@ -306,7 +306,7 @@ def generate_email_content(instructions: str, explicit_subject=None, sender_name
     return subject, body
 
 def extract_slack_channel_and_message(user_text: str):
-    from server.nlp_datetime_cleaner import normalize_text
+    from nlp_datetime_cleaner import normalize_text
     import openai
     
     original_text = user_text
@@ -444,7 +444,7 @@ def extract_slack_channel_and_message(user_text: str):
 
 @app.post("/chat")
 def chat_endpoint(req: ChatRequest):
-    from server.nlp_datetime_cleaner import normalize_text
+    from nlp_datetime_cleaner import normalize_text
     original_text = req.message
     user_text = normalize_text(original_text)
     print(f"Original text: {original_text}")
@@ -484,7 +484,7 @@ def chat_endpoint(req: ChatRequest):
     print("💡 NLP Classification:", classification_text)
 
     if "schedule_meeting" in classification_text:
-        from server.nlp_datetime_cleaner import extract_intent_modifiers
+        from nlp_datetime_cleaner import extract_intent_modifiers
         modifiers = extract_intent_modifiers(original_text, "schedule_meeting")
         print(f"Extracted modifiers: {modifiers}")
         normalized_text = normalize_datetime_input(user_text)
@@ -720,7 +720,7 @@ def chat_endpoint(req: ChatRequest):
             parts = new_name.split()
             new_firstname = parts[0]
             new_lastname = parts[1]
-            from server.hubspot_integration import find_hubspot_contact_by_email
+            from hubspot_integration import find_hubspot_contact_by_email
             contact_id = find_hubspot_contact_by_email(identifier_email)
             if not contact_id:
                 return {"reply": f"Couldn't find a HubSpot contact with email {identifier_email}."}
@@ -770,7 +770,7 @@ def chat_endpoint(req: ChatRequest):
                 identifier = name_match.group(1).strip()
         if not contact_id and identifier:
             if re.match(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b', identifier):
-                from server.hubspot_integration import find_hubspot_contact_by_email
+                from hubspot_integration import find_hubspot_contact_by_email
                 contact_id = find_hubspot_contact_by_email(identifier)
                 if not contact_id:
                     return {"reply": f"Couldn't find a HubSpot contact with email {identifier}."}
@@ -799,7 +799,7 @@ def chat_endpoint(req: ChatRequest):
             return {"reply": f"Failed to update contact with id {contact_id}."}
         
     elif "retrieve_crm" in classification_text:
-        from server.hubspot_integration import get_hubspot_contacts_dual
+        from hubspot_integration import get_hubspot_contacts_dual
         contacts_dual = get_hubspot_contacts_dual(limit_each=5)
 
         if not contacts_dual or (not contacts_dual["top"] and not contacts_dual["bottom"]):
@@ -845,7 +845,7 @@ def extract_meeting_description(text):
     return None
 
 def extract_slack_retrieve_params(user_text):
-    from server.nlp_datetime_cleaner import normalize_text
+    from nlp_datetime_cleaner import normalize_text
     normalized = normalize_text(user_text)
     channel = "#general"
     count = 5
