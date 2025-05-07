@@ -8,3 +8,9 @@ google-auth-httplib2
 google-auth-oauthlib
 dateparser
 slack_sdk
+transformers
+motor
+beanie
+pytz
+python-dateutil
+torch
