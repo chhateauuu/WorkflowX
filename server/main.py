@@ -799,16 +799,24 @@ def chat_endpoint(req: ChatRequest):
             return {"reply": f"Failed to update contact with id {contact_id}."}
         
     elif "retrieve_crm" in classification_text:
-        contacts = get_hubspot_contacts(limit=5)
-        if not contacts:
+        from server.hubspot_integration import get_hubspot_contacts_dual
+        contacts_dual = get_hubspot_contacts_dual(limit_each=5)
+
+        if not contacts_dual or (not contacts_dual["top"] and not contacts_dual["bottom"]):
             return {"reply": "No contacts found in HubSpot or an error occurred."}
 
-        reply_lines = ["Here are your latest HubSpot contacts:"]
-        for c in contacts:
+        reply_lines = ["📋 **Top 5 Newest Contacts:**"]
+        for c in contacts_dual["top"]:
             line = f"👤 {c.get('firstname', 'Unknown')} {c.get('lastname', '')} - {c.get('email', 'No email')}"
             reply_lines.append(line)
-        
+
+        reply_lines.append("\n📁 **Bottom 5 Oldest Contacts:**")
+        for c in contacts_dual["bottom"]:
+            line = f"👤 {c.get('firstname', 'Unknown')} {c.get('lastname', '')} - {c.get('email', 'No email')}"
+            reply_lines.append(line)
+
         return {"reply": "\n".join(reply_lines)}
+
 
     
     else:

@@ -40,6 +40,45 @@ def get_hubspot_contacts(limit=5):
     except Exception as e:
         print(f"Error calling HubSpot: {e}")
         return []
+    
+def get_hubspot_contacts_dual(limit_each=5):
+    headers = {
+        "Authorization": f"Bearer {HUBSPOT_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    url = "https://api.hubapi.com/crm/v3/objects/contacts?limit=100&properties=email,firstname,lastname,createdAt"
+
+    try:
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            print(f"HubSpot API error {response.status_code}: {response.text}")
+            return {"top": [], "bottom": []}
+
+        results = response.json().get("results", [])
+        all_contacts = [
+            {
+                "id": c.get("id"),
+                "email": c.get("properties", {}).get("email"),
+                "firstname": c.get("properties", {}).get("firstname"),
+                "lastname": c.get("properties", {}).get("lastname"),
+                "createdAt": c.get("properties", {}).get("createdAt"),
+            }
+            for c in results
+        ]
+
+        # Sort by creation time
+        sorted_contacts = sorted(all_contacts, key=lambda x: x.get("createdAt") or "")
+
+        bottom_5 = sorted_contacts[:limit_each]
+        top_5 = sorted_contacts[-limit_each:][::-1]  # latest first
+
+        return {"top": top_5, "bottom": bottom_5}
+
+    except Exception as e:
+        print(f"Error fetching HubSpot contacts: {e}")
+        return {"top": [], "bottom": []}
+
+
 
 def create_hubspot_contact(firstname, lastname, email):
     """
