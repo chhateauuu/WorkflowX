@@ -7,8 +7,8 @@ from fastapi_users.authentication import AuthenticationBackend, BearerTransport
 from fastapi_users.authentication.strategy.jwt import JWTStrategy
 from fastapi_users.db import BeanieUserDatabase
 
-from server.models import User, UserCreate, UserUpdate, UserDB
-from server.database import db
+from models import User, UserCreate, UserUpdate, UserDB
+from database import db
 from fastapi import Depends
 from fastapi_users.manager import BaseUserManager, UserManagerDependency
 from fastapi_users import UUIDIDMixin

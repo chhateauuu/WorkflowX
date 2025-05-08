@@ -101,39 +101,6 @@ const MessageInput = ({ onSend }) => {
         </div>
         
         <div className="input-actions">
-          <div className="emoji-container">
-            <button 
-              className="input-action-button"
-              onClick={() => setShowEmoji(!showEmoji)}
-            >
-              <FaSmile />
-            </button>
-            
-            {showEmoji && (
-              <motion.div 
-                className="emoji-picker"
-                initial={{ scale: 0.5, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.5, opacity: 0 }}
-                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              >
-                {quickEmojis.map((emoji, index) => (
-                  <button 
-                    key={index} 
-                    className="emoji-button" 
-                    onClick={() => addEmoji(emoji)}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </div>
-          
-          <button className="input-action-button">
-            <FaMicrophone />
-          </button>
-          
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -142,7 +109,6 @@ const MessageInput = ({ onSend }) => {
             disabled={message.trim() === ""}
           >
             <FaPaperPlane />
-            <span>Send</span>
           </motion.button>
         </div>
       </div>

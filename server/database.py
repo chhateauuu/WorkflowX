@@ -5,7 +5,7 @@ from beanie import init_beanie
 import os
 from dotenv import load_dotenv
 
-from server.models import User  # we'll create this soon
+from models import User  # we'll create this soon
 
 load_dotenv()
 
