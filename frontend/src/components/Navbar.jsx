@@ -10,11 +10,13 @@ import {
   FaMoon,
   FaSun,
   FaBars,
-  FaTimes
+  FaTimes,
+  FaChartLine,
+  FaHome
 } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 
 const Navbar = ({ darkMode, toggleDarkMode }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -24,6 +26,7 @@ const Navbar = ({ darkMode, toggleDarkMode }) => {
   
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   
   // For debugging
   useEffect(() => {
@@ -85,6 +88,7 @@ const Navbar = ({ darkMode, toggleDarkMode }) => {
           className="brand-container"
           whileHover={{ scale: 1.05 }}
           transition={{ type: "spring", stiffness: 400 }}
+          onClick={() => navigate('/')}
         >
           <span className="brand">WorkflowX</span>
         </motion.div>
@@ -92,28 +96,24 @@ const Navbar = ({ darkMode, toggleDarkMode }) => {
         {/* Desktop Navigation Links */}
         <div className="nav-links desktop-only">
           <motion.span 
-            className="nav-link active"
+            as={Link}
+            to="/"
+            className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}
             whileHover={{ scale: 1.1 }}
+            onClick={() => navigate('/')}
           >
-            Dashboard
+            <FaHome className="nav-icon-small" />
+            Your Assistant
           </motion.span>
           <motion.span 
-            className="nav-link"
+            as={Link}
+            to="/analytics"
+            className={`nav-link ${location.pathname === '/analytics' ? 'active' : ''}`}
             whileHover={{ scale: 1.1 }}
+            onClick={() => navigate('/analytics')}
           >
-            Projects
-          </motion.span>
-          <motion.span 
-            className="nav-link"
-            whileHover={{ scale: 1.1 }}
-          >
+            <FaChartLine className="nav-icon-small" />
             Analytics
-          </motion.span>
-          <motion.span 
-            className="nav-link"
-            whileHover={{ scale: 1.1 }}
-          >
-            Calendar
           </motion.span>
         </div>
         
@@ -265,17 +265,25 @@ const Navbar = ({ darkMode, toggleDarkMode }) => {
             transition={{ duration: 0.2 }}
           >
             <div className="mobile-menu-items">
-              <div className="mobile-menu-item active">
-                <span>Dashboard</span>
+              <div 
+                className={`mobile-menu-item ${location.pathname === '/' ? 'active' : ''}`}
+                onClick={() => {
+                  navigate('/');
+                  setMobileMenuOpen(false);
+                }}
+              >
+                <FaHome className="mobile-menu-item-icon" />
+                <span>Your Assistant</span>
               </div>
-              <div className="mobile-menu-item">
-                <span>Projects</span>
-              </div>
-              <div className="mobile-menu-item">
+              <div 
+                className={`mobile-menu-item ${location.pathname === '/analytics' ? 'active' : ''}`}
+                onClick={() => {
+                  navigate('/analytics');
+                  setMobileMenuOpen(false);
+                }}
+              >
+                <FaChartLine className="mobile-menu-item-icon" />
                 <span>Analytics</span>
-              </div>
-              <div className="mobile-menu-item">
-                <span>Calendar</span>
               </div>
               <div className="mobile-menu-divider"></div>
               {currentUser && (

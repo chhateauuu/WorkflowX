@@ -6,6 +6,7 @@ import ChatWindow from "./components/ChatWindow";
 import MessageInput from "./components/MessageInput";
 import Login from "./components/Login";
 import Register from "./components/Register";
+import Analytics from "./components/Analytics";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import "./styles.css";
@@ -183,9 +184,16 @@ const MainApp = () => {
           key="app"
         >
           <Navbar darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
-          <div className="chat-container">
-            <ChatWindow messages={messages} />
-            <MessageInput onSend={sendMessage} />
+          <div className="content-container">
+            <Routes>
+              <Route path="/" element={
+                <div className="chat-container">
+                  <ChatWindow messages={messages} />
+                  <MessageInput onSend={sendMessage} />
+                </div>
+              } />
+              <Route path="/analytics" element={<Analytics />} />
+            </Routes>
           </div>
         </motion.div>
       )}
@@ -202,7 +210,7 @@ const App = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route 
-            path="/" 
+            path="/*" 
             element={
               <ProtectedRoute>
                 <MainApp />

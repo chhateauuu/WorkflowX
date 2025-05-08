@@ -105,7 +105,7 @@ def _summarize_email(content: str) -> str:
 ###############################################################################
 # 4) GET + SUMMARIZE LATEST EMAILS FROM INBOX
 ###############################################################################
-def get_latest_emails(max_results: int = 5, sender_filter: str = None) -> str:
+def get_latest_emails(max_results: int = 5, sender_filter: str = None, force_refresh: bool = False) -> str:
     """
     Retrieves the latest messages from the user's Inbox (max_results),
     with optional filtering by sender,
@@ -117,6 +117,7 @@ def get_latest_emails(max_results: int = 5, sender_filter: str = None) -> str:
     Parameters:
     - max_results: Maximum number of emails to retrieve
     - sender_filter: Filter emails by sender name or email address (case-insensitive substring match)
+    - force_refresh: If True, bypass any caching and always get fresh data
     """
     try:
         creds = get_gmail_credentials()
@@ -133,6 +134,9 @@ def get_latest_emails(max_results: int = 5, sender_filter: str = None) -> str:
             else:
                 # For names we need to be more careful - Gmail API uses exact phrase matching
                 query += f" from:{sender_filter}"
+        
+        if force_refresh:
+            print(f"Fetching fresh email data with query: {query}")
         
         result = service.users().messages().list(
             userId="me",
