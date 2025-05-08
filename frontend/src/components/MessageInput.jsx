@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { FaPaperPlane, FaSmile, FaMicrophone, FaPaperclip } from "react-icons/fa";
+import { FaPaperPlane, FaSmile, FaMicrophone } from "react-icons/fa";
 
 const MessageInput = ({ onSend }) => {
   const [message, setMessage] = useState("");
@@ -76,12 +76,7 @@ const MessageInput = ({ onSend }) => {
   }, []);
 
   return (
-    <motion.div 
-      className="message-input-container"
-      initial={{ y: 50, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ type: "spring", stiffness: 500, damping: 30, delay: 0.2 }}
-    >
+    <div className="message-input-container">
       {isTyping && (
         <motion.div 
           className="typing-indicator"
@@ -94,10 +89,6 @@ const MessageInput = ({ onSend }) => {
       )}
       
       <div className="message-input">
-        <button className="input-action-button">
-          <FaPaperclip />
-        </button>
-        
         <div className="input-wrapper">
           <textarea
             ref={inputRef}
@@ -155,7 +146,7 @@ const MessageInput = ({ onSend }) => {
           </motion.button>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 };
 

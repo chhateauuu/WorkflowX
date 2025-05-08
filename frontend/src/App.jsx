@@ -108,26 +108,19 @@ const MainApp = () => {
       })
         .then((res) => res.json())
         .then((data) => {
-          // Ensure typing animation shows for at least 1 second
-          const responseReceivedTime = new Date().getTime();
-          const minimumTypingTime = 1000; // 1 second minimum typing time
-          
-          setTimeout(() => {
-            // data.reply is the AI's response from the server
-            setMessages((prev) => [
-              ...prev,
-              { text: data.reply, sender: "bot" },
-            ]);
-          }, minimumTypingTime);
+          // No need to add artificial delay since we now have typing animation
+          // Add the bot message to the messages array
+          setMessages((prev) => [
+            ...prev,
+            { text: data.reply, sender: "bot" },
+          ]);
         })
         .catch((error) => {
           console.error("Error calling AI endpoint:", error);
-          setTimeout(() => {
-            setMessages((prev) => [
-              ...prev,
-              { text: "Oops, something went wrong with the AI service.", sender: "bot" },
-            ]);
-          }, 1000); // Still show typing for 1 second even on error
+          setMessages((prev) => [
+            ...prev,
+            { text: "Oops, something went wrong with the AI service.", sender: "bot" },
+          ]);
         });
     }
   };
@@ -187,7 +180,7 @@ const MainApp = () => {
           <div className="content-container">
             <Routes>
               <Route path="/" element={
-                <div className="chat-container">
+                <div className="chat-container full-width">
                   <ChatWindow messages={messages} />
                   <MessageInput onSend={sendMessage} />
                 </div>

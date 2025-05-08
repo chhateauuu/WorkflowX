@@ -14,12 +14,12 @@ const ChatMessage = ({ text, sender, isFirst = true, isLast = true }) => {
     initial: { 
       opacity: 0, 
       y: 20,
-      scale: 0.8
+      x: sender === "user" ? 20 : -20
     },
     animate: { 
       opacity: 1, 
       y: 0,
-      scale: 1
+      x: 0
     },
     exit: {
       opacity: 0,
@@ -42,13 +42,13 @@ const ChatMessage = ({ text, sender, isFirst = true, isLast = true }) => {
       className={`chat-message ${sender}`}
       layout
     >
-      {sender === 'bot' && isFirst && (
+      {sender === "bot" && isFirst && (
         <div className="message-avatar bot-avatar">
           <FaRobot />
         </div>
       )}
       
-      {sender === 'bot' && !isFirst && (
+      {sender === "bot" && !isFirst && (
         <div className="message-avatar-spacer"></div>
       )}
       
@@ -57,13 +57,13 @@ const ChatMessage = ({ text, sender, isFirst = true, isLast = true }) => {
         {isLast && <span className="message-timestamp">{timestamp}</span>}
       </div>
       
-      {sender === 'user' && isFirst && (
+      {sender === "user" && isFirst && (
         <div className="message-avatar user-avatar">
           <FaUser />
         </div>
       )}
       
-      {sender === 'user' && !isFirst && (
+      {sender === "user" && !isFirst && (
         <div className="message-avatar-spacer"></div>
       )}
     </motion.div>
